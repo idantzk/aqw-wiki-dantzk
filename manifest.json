@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "AQW WIKI DANTZK",
+  "version": "1.0.0",
+  "description": "Preview de itens, marcacao de posse e utilidades para AQW Wiki e CharPage.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "http://aqwwiki.wikidot.com/*",
+    "https://aqwwiki.wikidot.com/*",
+    "https://account.aq.com/*",
+    "https://www.artix.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/index.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://aqwwiki.wikidot.com/*",
+        "https://aqwwiki.wikidot.com/*"
+      ],
+      "js": ["content/shared.js", "content/badges.js", "content/wiki.js"],
+      "css": ["content/styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://account.aq.com/*"],
+      "js": ["content/shared.js", "content/account.js", "content/badges.js", "content/wiki.js"],
+      "css": ["content/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*.png", "data/*.json"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  }
+}

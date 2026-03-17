@@ -1,0 +1,1309 @@
+(async function initWikiHelper() {
+  const currentUrl = window.location.href;
+  const lowerUrl = currentUrl.toLowerCase();
+  const isWiki = lowerUrl.includes("aqwwiki.wikidot.com");
+  const isCharPage = lowerUrl.includes("account.aq.com/charpage") && /[?&]id=/.test(lowerUrl);
+
+  if (!isWiki && !isCharPage) return;
+
+  const previewBox = document.createElement("div");
+  previewBox.id = "aqw-helper-preview";
+  previewBox.className = "content-view";
+  document.body.appendChild(previewBox);
+
+  const previewCache = new Map();
+  let hoverTimer = null;
+  let remarkTimer = null;
+  let activePreviewKey = "";
+  let inventoryItems = await getInventoryData();
+  let inventoryIndex = buildInventoryIndex(inventoryItems);
+  let wikiItemsPromise = null;
+
+  function hasSyncedInventory() {
+    return Array.isArray(inventoryItems) && inventoryItems.length > 0;
+  }
+
+  function isReputationText(text) {
+    const value = String(text || "").toLowerCase().trim();
+    return value.includes("reputation");
+  }
+
+  function isCategoryHeaderText(text) {
+    const blocked = new Set([
+      "classes",
+      "weapons",
+      "classes / armors",
+      "classes/armors",
+      "armors",
+      "helms",
+      "helmets",
+      "helmets & hoods",
+      "back items",
+      "capes & back items",
+      "pets",
+      "misc. items",
+      "misc items",
+      "class",
+      "armor",
+      "helm",
+      "cape",
+      "sword",
+      "axe",
+      "dagger",
+      "mace",
+      "staff",
+      "wand",
+      "pet",
+      "item",
+      "quest item",
+      "quest items",
+      "house",
+      "houses",
+      "resource",
+      "resources",
+      "floor item",
+      "floor items",
+      "wall item",
+      "wall items",
+      "2023",
+      "- 2023"
+    ]);
+
+    return blocked.has(String(text || "").toLowerCase().trim());
+  }
+
+  function isValidItemText(text) {
+    if (!text) return false;
+
+    const clean = text.trim();
+    if (clean.length < 2 || clean.length > 120) return false;
+    if (/^[0-9]+$/.test(clean)) return false;
+    if (isReputationText(clean) || isCategoryHeaderText(clean)) return false;
+
+    const blockedTexts = [
+      "character page",
+      "inventory",
+      "bank",
+      "house",
+      "guild",
+      "page 1",
+      "page 2"
+    ];
+
+    const lower = clean.toLowerCase();
+    return !blockedTexts.some((value) => lower === value || lower.includes(value));
+  }
+
+  function isNonItemWikiLink(link) {
+    if (!link) return true;
+
+    const text = (link.textContent || "").trim();
+    if (!isValidItemText(text)) return true;
+
+    if (
+      link.closest("#breadcrumbs") ||
+      link.closest("#side-bar") ||
+      link.closest("#top-bar") ||
+      link.closest(".page-tags") ||
+      link.closest(".options") ||
+      link.closest(".pager") ||
+      link.closest(".yui-nav") ||
+      link.closest("sub")
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function readNodeText(node) {
+    const text = (node?.textContent || "").replace(/\s+/g, " ").trim();
+    return text.toLowerCase();
+  }
+
+  function getClosestSectionLabel(link) {
+    let current = link;
+    let depth = 0;
+
+    while (current && depth < 12) {
+      let sibling = current.previousSibling;
+      while (sibling) {
+        const text = readNodeText(sibling);
+        if (
+          text.includes("skills:") ||
+          text.includes("notes:") ||
+          text.includes("location:") ||
+          text.includes("locations:") ||
+          text.includes("monster:") ||
+          text.includes("monsters:") ||
+          text.includes("map:") ||
+          text.includes("maps:") ||
+          text.includes("also see:")
+        ) {
+          return text;
+        }
+        sibling = sibling.previousSibling;
+      }
+
+      current = current.parentNode;
+      depth += 1;
+    }
+
+    return "";
+  }
+
+  function getSectionContextText(link) {
+    let current = link;
+    let depth = 0;
+
+    while (current && depth < 10) {
+      let sibling = current.previousSibling;
+      while (sibling) {
+        const text = readNodeText(sibling);
+        if (text) {
+          return text;
+        }
+        sibling = sibling.previousSibling;
+      }
+
+      const parent = current.parentElement;
+      if (!parent) {
+        break;
+      }
+
+      const parentText = readNodeText(parent);
+      if (
+        parentText.includes("skills:") ||
+        parentText.includes("notes:") ||
+        parentText.includes("location:") ||
+        parentText.includes("locations:") ||
+        parentText.includes("monster:") ||
+        parentText.includes("monsters:") ||
+        parentText.includes("map:") ||
+        parentText.includes("maps:")
+      ) {
+        return parentText;
+      }
+
+      current = parent;
+      depth += 1;
+    }
+
+    return "";
+  }
+
+  function looksLikeClassOrItemText(text) {
+    const value = String(text || "").toLowerCase().trim();
+    if (!value) return false;
+
+    return /(class|armor|robe|helm|hood|cape|cloak|pet|sword|axe|dagger|mace|staff|wand|bow|gun|polearm|item|house item|wall item|floor item|\(ac\)|\(0 ac\)|merge|legend|rare)/i.test(value);
+  }
+
+  function isClassDetailPage() {
+    if (!isWiki) return false;
+
+    if (lowerUrl.includes("/classes") && !/\/classes(?:[?#]|$)/i.test(currentUrl)) {
+      return true;
+    }
+
+    const breadcrumbs = readNodeText(document.querySelector("#breadcrumbs"));
+    return breadcrumbs.includes("items") && breadcrumbs.includes("classes");
+  }
+
+  function isJunkWikiReference(text) {
+    const value = String(text || "").toLowerCase().trim();
+    if (!value) return false;
+
+    return (
+      value.includes("lorepedia") ||
+      value.includes("patch notes") ||
+      value.includes("design notes") ||
+      value.includes("class breakdown") ||
+      value.includes("revamp") ||
+      value.includes("breakdown") ||
+      value.includes("list of all") ||
+      value.includes("npc") ||
+      value.includes("(npc)") ||
+      value.includes("(location)") ||
+      value.includes(" location") ||
+      value.includes(" map") ||
+      value.includes("maps") ||
+      value.includes("monsters") ||
+      value.includes("monster")
+    );
+  }
+
+  function isSameSkillsReference(lineText, closestLabel) {
+    const value = `${lineText} ${closestLabel}`.toLowerCase();
+    return value.includes("same skills as");
+  }
+
+  function shouldSkipWikiContext(link) {
+    if (!isWiki || !link) return false;
+
+    const onClassDetailPage = isClassDetailPage();
+    const sectionText = getSectionContextText(link);
+    const closestLabel = getClosestSectionLabel(link);
+    const text = (link.textContent || "").replace(/\s+/g, " ").trim();
+    const lowerText = text.toLowerCase();
+    const lineText = readNodeText(link.closest("li, p, div, td, tr") || link.parentElement);
+
+    if (link.closest("#page-title, #breadcrumbs")) {
+      return false;
+    }
+
+    if (/requires rank\s+\d+/i.test(lineText) || /requires rank\s+\d+/i.test(lowerText)) {
+      return false;
+    }
+
+    if (
+      sectionText.includes("skills:") ||
+      sectionText === "skills" ||
+      lineText.includes("skills:") ||
+      closestLabel.includes("skills:")
+    ) {
+      return true;
+    }
+
+    if (
+      sectionText.includes("monster:") ||
+      sectionText.includes("monsters:") ||
+      sectionText === "monster" ||
+      sectionText === "monsters" ||
+      lineText.includes("monster:") ||
+      lineText.includes("monsters:") ||
+      closestLabel.includes("monster:") ||
+      closestLabel.includes("monsters:")
+    ) {
+      return true;
+    }
+
+    if (
+      sectionText.includes("map:") ||
+      sectionText.includes("maps:") ||
+      sectionText === "map" ||
+      sectionText === "maps" ||
+      lineText.includes("map:") ||
+      lineText.includes("maps:") ||
+      closestLabel.includes("map:") ||
+      closestLabel.includes("maps:")
+    ) {
+      return true;
+    }
+
+    if (onClassDetailPage) {
+      if (
+        sectionText.includes("location:") ||
+        sectionText.includes("locations:") ||
+        sectionText === "location" ||
+        sectionText === "locations" ||
+        lineText.includes("location:") ||
+        lineText.includes("locations:") ||
+        closestLabel.includes("location:") ||
+        closestLabel.includes("locations:")
+      ) {
+        return true;
+      }
+
+      if (
+        sectionText.includes("notes:") ||
+        sectionText === "notes" ||
+        lineText.includes("notes:") ||
+        closestLabel.includes("notes:") ||
+        closestLabel.includes("also see:")
+      ) {
+        if (isSameSkillsReference(lineText, closestLabel)) {
+          return isJunkWikiReference(text) || lowerText.includes("armor set");
+        }
+
+        if (isJunkWikiReference(text) || isJunkWikiReference(lineText)) {
+          return true;
+        }
+
+        return false;
+      }
+    }
+
+    if (
+      lowerText.includes("lorepedia") ||
+      lowerText.includes("patch notes") ||
+      lowerText.includes("design notes") ||
+      lowerText.includes("class breakdown") ||
+      lowerText.includes("list of all") ||
+      lowerText.includes("(npc)")
+    ) {
+      return true;
+    }
+
+    if (closestLabel.includes("also see:")) {
+      if (isJunkWikiReference(text) || isJunkWikiReference(lineText)) {
+        return true;
+      }
+
+      return false;
+    }
+
+    if (looksLikeClassOrItemText(text)) {
+      return false;
+    }
+
+    if (
+      sectionText.includes("location:") ||
+      sectionText.includes("locations:") ||
+      sectionText === "location" ||
+      sectionText === "locations" ||
+      lineText.includes("location:") ||
+      lineText.includes("locations:") ||
+      closestLabel.includes("location:") ||
+      closestLabel.includes("locations:")
+    ) {
+      const listItem = link.closest("li");
+      if (listItem) {
+        const links = Array.from(listItem.querySelectorAll("a"));
+        if (links[0] !== link) {
+          return true;
+        }
+      }
+
+      return !looksLikeClassOrItemText(text);
+    }
+
+    return false;
+  }
+
+  function isOwnedPageTitle() {
+    const pageTitle = document.querySelector("#page-title");
+    const title = (pageTitle?.textContent || "").trim();
+    if (!title) {
+      return false;
+    }
+
+    return hasItem(inventoryIndex, title);
+  }
+
+  async function getWikiItemsData() {
+    if (!wikiItemsPromise) {
+      wikiItemsPromise = fetch(chrome.runtime.getURL("data/WikiItems.json"))
+        .then((response) => response.json())
+        .catch(() => ({}));
+    }
+
+    return wikiItemsPromise;
+  }
+
+  function getWikiItemDetails(rawData, itemName) {
+    if (!rawData) return null;
+
+    const normalizedTarget = normalizeItemName(itemName);
+    const directEntry = rawData[itemName];
+    if (directEntry) {
+      return { key: itemName, entry: directEntry };
+    }
+
+    for (const [key, value] of Object.entries(rawData)) {
+      if (normalizeItemName(key) === normalizedTarget) {
+        return { key, entry: value };
+      }
+    }
+
+    return null;
+  }
+
+  function buildWikiUrlFromDetails(itemName, details) {
+    const detailSlug = details?.entry?.[0];
+    if (typeof detailSlug === "string" && detailSlug.startsWith("/")) {
+      return `https://aqwwiki.wikidot.com${detailSlug}`;
+    }
+
+    return buildWikiUrlFromName(itemName).replace("http://", "https://");
+  }
+
+  function clearOldCustomMarks(target) {
+    if (!target) return;
+    target
+      .querySelectorAll(".aqw-helper-mark, .aqw-helper-status-icon, .aqw-helper-icon")
+      .forEach((el) => el.remove());
+  }
+
+  function getLinkItemText(link) {
+    if (!link) return "";
+
+    const clone = link.cloneNode(true);
+    clone.querySelectorAll(".aqw-helper-mark, .aqw-helper-status-icon, .aqw-helper-icon, img").forEach((el) => el.remove());
+
+    return (clone.textContent || "")
+      .replace(/\s*\(Rank\s+\d+\)/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function appendOwnedMark(target, itemName) {
+    const location = getBestLocation(inventoryIndex, itemName);
+    const mark = document.createElement("span");
+    mark.className = "aqw-helper-mark owned";
+    mark.textContent = "\u2714";
+    mark.title = "Voce ja tem este item";
+    target.appendChild(mark);
+
+    const iconTitle =
+      location === "bank"
+        ? "Voce tem esse item no Bank"
+        : "Voce tem esse item no Inventario";
+    const iconSrc =
+      location === "bank"
+        ? chrome.runtime.getURL("images/bank.png")
+        : chrome.runtime.getURL("images/inventory.png");
+
+    target.appendChild(createIcon(iconSrc, iconTitle, "aqw-helper-status-icon"));
+  }
+
+  function appendMissingMark(target) {
+    const mark = document.createElement("span");
+    mark.className = "aqw-helper-mark missing";
+    mark.textContent = " \u2716";
+    mark.title = "Voce ainda nao tem este item";
+    target.appendChild(mark);
+  }
+
+  function appendSimpleOwnedMark(target, title) {
+    const mark = document.createElement("span");
+    mark.className = "aqw-helper-mark owned";
+    mark.textContent = "\u2714";
+    mark.title = title || "Voce ja cumpriu este requisito";
+    target.appendChild(mark);
+  }
+
+  function resolveRowItemLink(target) {
+    const row = target?.closest?.("tr");
+    if (!row) {
+      return null;
+    }
+
+    const cells = Array.from(row.querySelectorAll("td, th"));
+    if (!cells.length) {
+      return null;
+    }
+
+    const candidateCells = [];
+    if (cells[1]) {
+      candidateCells.push(cells[1]);
+    }
+    candidateCells.push(...cells);
+
+    for (const cell of candidateCells) {
+      const anchor = Array.from(cell.querySelectorAll("a")).find((link) => {
+        const text = getLinkItemText(link);
+        return isValidItemText(text) && !isNonItemWikiLink(link) && !/^rank\s+\d+/i.test(text);
+      });
+
+      if (anchor) {
+        return anchor;
+      }
+    }
+
+    return null;
+  }
+
+  function resolvePreviewLink(target) {
+    if (!target?.closest) {
+      return null;
+    }
+
+    return target.closest("a") || resolveRowItemLink(target);
+  }
+
+  function getPreviewKey(link) {
+    if (!link) {
+      return "";
+    }
+
+    const href = link.getAttribute("href") || "";
+    const text = getLinkItemText(link);
+    return `${href}::${text}`.toLowerCase();
+  }
+
+  function shouldSkipPreviewLink(link) {
+    if (!link) {
+      return true;
+    }
+
+    if (
+      link.closest("#breadcrumbs") ||
+      link.closest("#side-bar") ||
+      link.closest("#top-bar") ||
+      link.closest(".page-tags") ||
+      link.closest(".options") ||
+      link.closest(".pager") ||
+      link.closest(".yui-nav") ||
+      link.closest("sub")
+    ) {
+      return true;
+    }
+
+    const href = (link.getAttribute("href") || link.href || "").toLowerCase();
+    const text = getLinkItemText(link).toLowerCase();
+
+    if (!href || href.startsWith("javascript:") || href.includes(":")) {
+      return true;
+    }
+
+    return (
+      text.includes("lorepedia") ||
+      text.includes("patch notes") ||
+      text.includes("design notes") ||
+      text.includes("class breakdown") ||
+      text.includes("npc") ||
+      text.includes("(npc)") ||
+      text.includes("(location)")
+    );
+  }
+
+  function getRelatedRowLinks(target) {
+    const row = target.closest("tr, li, p, div");
+    if (!row) return [];
+
+    return Array.from(row.querySelectorAll("a")).filter((link) => {
+      if (link === target) return false;
+      const text = getLinkItemText(link);
+      if (!isValidItemText(text) || isNonItemWikiLink(link) || shouldSkipWikiContext(link)) {
+        return false;
+      }
+
+      return true;
+    });
+  }
+
+  function isRankRequirementTarget(target, itemName, lineText) {
+    const lowerItemName = String(itemName || "").toLowerCase().trim();
+    const targetCellText = readNodeText(target.closest("td, th, li, p, div") || target.parentElement);
+
+    if (/^rank\s+\d+/i.test(lowerItemName)) {
+      return true;
+    }
+
+    if (/^rank\s+\d+/i.test(targetCellText)) {
+      return true;
+    }
+
+    if (/requires rank\s+\d+/i.test(lineText) && !looksLikeClassOrItemText(itemName)) {
+      return true;
+    }
+
+    if (/rank\s+\d+\s+/i.test(lineText) && !looksLikeClassOrItemText(itemName)) {
+      const escapedName = lowerItemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`rank\\s+\\d+\\s+${escapedName}`).test(lineText);
+    }
+
+    return false;
+  }
+
+  function addStatus(target, itemName) {
+    if (!target || target.dataset.aqwMarked === "1") return;
+    if (!isValidItemText(itemName)) return;
+
+    clearOldCustomMarks(target);
+
+    const lineText = readNodeText(target.closest("li, p, div, td, tr") || target.parentElement);
+    const hasRankRequirement = isRankRequirementTarget(target, itemName, lineText);
+
+    if (hasRankRequirement) {
+      const relatedRowLinks = getRelatedRowLinks(target);
+      const relatedOwned = relatedRowLinks.some((link) => hasItem(inventoryIndex, getLinkItemText(link)));
+
+      if (relatedOwned || isOwnedPageTitle()) {
+        appendSimpleOwnedMark(target, "Voce ja cumpriu este requisito de rank");
+      } else if (hasSyncedInventory()) {
+        appendMissingMark(target);
+      }
+      target.dataset.aqwMarked = "1";
+      return;
+    }
+
+    if (hasItem(inventoryIndex, itemName)) {
+      appendOwnedMark(target, itemName);
+    } else if (hasSyncedInventory()) {
+      appendMissingMark(target);
+    }
+
+    target.dataset.aqwMarked = "1";
+  }
+
+  function markTableRows() {
+    if (!isWiki) return;
+
+    document.querySelectorAll("#page-content tr").forEach((row) => {
+      const cells = Array.from(row.querySelectorAll("td, th"));
+      if (!cells.length) return;
+
+      let itemLinks = [];
+      let rankLink = null;
+
+      if (cells.length >= 3) {
+        const nameCell = cells[Math.min(1, cells.length - 1)];
+        const rankCell = cells[Math.min(2, cells.length - 1)];
+
+        itemLinks = Array.from(nameCell.querySelectorAll("a")).filter((link) => {
+          const text = getLinkItemText(link);
+          return isValidItemText(text) && !isNonItemWikiLink(link);
+        });
+
+        rankLink = Array.from(rankCell.querySelectorAll("a")).find((link) =>
+          /^rank\s+\d+/i.test(getLinkItemText(link))
+        ) || null;
+      }
+
+      if (!itemLinks.length) {
+        const links = Array.from(row.querySelectorAll("a"));
+        if (!links.length) return;
+
+        itemLinks = links.filter((link) => {
+          const text = getLinkItemText(link);
+          if (!isValidItemText(text) || isNonItemWikiLink(link) || shouldSkipWikiContext(link)) {
+            return false;
+          }
+
+          return !/^rank\s+\d+/i.test(text);
+        });
+
+        if (!rankLink) {
+          rankLink = links.find((link) => /^rank\s+\d+/i.test(getLinkItemText(link))) || null;
+        }
+      }
+
+        itemLinks.forEach((link) => {
+        if (link.dataset.aqwMarked === "1") return;
+        addStatus(link, getLinkItemText(link));
+      });
+
+      if (rankLink && rankLink.dataset.aqwMarked !== "1") {
+        addStatus(rankLink, getLinkItemText(rankLink));
+      }
+    });
+  }
+
+  function markElements() {
+    if (isWiki && lowerUrl.includes("-badges")) {
+      return;
+    }
+
+    if (isWiki) {
+      document.querySelectorAll("#page-content a").forEach((link) => {
+        if (link.dataset.aqwProcessed === "1") return;
+
+        const text = getLinkItemText(link);
+        if (!isValidItemText(text) || isNonItemWikiLink(link) || shouldSkipWikiContext(link)) {
+          link.dataset.aqwProcessed = "1";
+          return;
+        }
+
+        addStatus(link, text);
+        link.dataset.aqwProcessed = "1";
+      });
+
+      markTableRows();
+    }
+
+    if (isCharPage) {
+      document.querySelectorAll("a").forEach((link) => {
+        if (link.dataset.aqwProcessed === "1") return;
+
+        const text = (link.textContent || "").trim().replace(/\s*\(Rank\s+\d+\)/i, "").trim();
+        if (!isValidItemText(text)) {
+          link.dataset.aqwProcessed = "1";
+          return;
+        }
+
+        addStatus(link, text);
+        link.dataset.aqwProcessed = "1";
+      });
+    }
+
+    const pageTitle = document.querySelector("#page-title");
+    if (pageTitle && pageTitle.dataset.aqwProcessed !== "1") {
+      const title = pageTitle.textContent.trim();
+      if (isValidItemText(title)) {
+        addStatus(pageTitle, title);
+      }
+      pageTitle.dataset.aqwProcessed = "1";
+    }
+  }
+
+  function resetMarks() {
+    document.querySelectorAll("[data-aqw-processed]").forEach((el) => {
+      delete el.dataset.aqwProcessed;
+    });
+
+    document.querySelectorAll("[data-aqw-marked]").forEach((el) => {
+      delete el.dataset.aqwMarked;
+      clearOldCustomMarks(el);
+    });
+  }
+
+  function refreshInventory(items) {
+    inventoryItems = items || [];
+    inventoryIndex = buildInventoryIndex(inventoryItems);
+    resetMarks();
+    markElements();
+  }
+
+  function isValidImg(srcImg) {
+    if (!srcImg) return false;
+
+    const url = srcImg.toLowerCase();
+    const blocked = [
+      "/image-tags/",
+      "acsmall",
+      "aclarge",
+      "raresmall",
+      "rarelarge",
+      "legendsmall",
+      "legendlarge",
+      "membersmall",
+      "memberlarge",
+      "map",
+      "npc"
+    ];
+
+    return !blocked.some((word) => url.includes(word));
+  }
+
+  function fetchHtmlThroughBackground(url) {
+    return new Promise((resolve) => {
+      try {
+        if (!chrome?.runtime?.id) {
+          resolve(null);
+          return;
+        }
+
+        chrome.runtime.sendMessage({ action: "fetchHtml", url }, (response) => {
+          if (chrome.runtime.lastError || !response?.ok) {
+            resolve(null);
+            return;
+          }
+
+          resolve(response.html || null);
+        });
+      } catch (_error) {
+        resolve(null);
+      }
+    });
+  }
+
+  async function fetchHtmlWithFallback(url) {
+    const backgroundHtml = await fetchHtmlThroughBackground(url);
+    if (backgroundHtml) {
+      return backgroundHtml;
+    }
+
+    try {
+      const response = await fetch(url, { credentials: "omit" });
+      if (!response.ok) {
+        return null;
+      }
+
+      return await response.text();
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function getImageCandidateSrc(img) {
+    if (!img) return "";
+
+    const direct =
+      img.getAttribute("src") ||
+      img.getAttribute("data-src") ||
+      img.getAttribute("data-lazy-src") ||
+      img.getAttribute("data-original") ||
+      "";
+
+    if (direct) {
+      return direct;
+    }
+
+    const srcSet = img.getAttribute("srcset") || img.getAttribute("data-srcset") || "";
+    if (!srcSet) {
+      return "";
+    }
+
+    const firstSrc = srcSet.split(",")[0]?.trim().split(/\s+/)[0] || "";
+    return firstSrc;
+  }
+
+  function normalizePreviewImageUrl(src) {
+    const value = String(src || "").trim();
+    if (!value) {
+      return "";
+    }
+
+    if (value.startsWith("//")) {
+      return `https:${value}`;
+    }
+
+    if (value.startsWith("/")) {
+      return `https://aqwwiki.wikidot.com${value}`;
+    }
+
+    return value.replace("http://", "https://");
+  }
+
+  function extractPreviewImagesFromHtml(html) {
+    const images = [];
+    const pushImage = (src) => {
+      const normalized = normalizePreviewImageUrl(src);
+      if (!normalized || !isValidImg(normalized) || images.includes(normalized)) {
+        return;
+      }
+
+      images.push(normalized);
+    };
+
+    const imgRegex = /<img[^>]+src="([^"]+)"[^>]*>/gi;
+    let match;
+    while ((match = imgRegex.exec(html)) !== null) {
+      pushImage(match[1]);
+    }
+
+    const hrefImgRegex = /https?:\/\/i\.imgur\.com\/[a-z0-9]+\.(?:png|jpg|jpeg|gif|webp)/gi;
+    while ((match = hrefImgRegex.exec(html)) !== null) {
+      pushImage(match[0]);
+    }
+
+    return images;
+  }
+
+  function normalizePreviewName(name) {
+    return String(name || "")
+      .replace(/\s+\(\d+\)$/i, "")
+      .replace(/\s+x\d+$/i, "")
+      .trim();
+  }
+
+  function slugifyRawPreviewName(name) {
+    return String(name || "")
+      .toLowerCase()
+      .replace(/\s+x\d+$/i, "")
+      .replace(/[']/g, "-")
+      .replace(/[()]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9\-]/g, "")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
+
+  function buildPreviewUrls(itemName, href, details) {
+    const urls = [];
+    const pushUrl = (value) => {
+      if (!value) return;
+      const normalized = value.replace("http://", "https://");
+      if (!urls.includes(normalized)) {
+        urls.push(normalized);
+      }
+    };
+
+    if (href) {
+      if (href.startsWith("http://") || href.startsWith("https://")) {
+        pushUrl(href);
+      } else if (href.startsWith("/")) {
+        pushUrl(`https://aqwwiki.wikidot.com${href}`);
+      }
+    }
+
+    const detailSlug = details?.entry?.[0];
+    if (typeof detailSlug === "string" && detailSlug.startsWith("/")) {
+      pushUrl(`https://aqwwiki.wikidot.com${detailSlug}`);
+    }
+
+    const rawNames = [itemName, normalizePreviewName(itemName), normalizeItemName(itemName)];
+    rawNames.forEach((value) => {
+      if (value) {
+        pushUrl(buildWikiUrlFromName(value));
+      }
+    });
+
+    const rawSlug = slugifyRawPreviewName(itemName);
+    if (rawSlug) {
+      pushUrl(`https://aqwwiki.wikidot.com/${rawSlug}`);
+    }
+
+    return urls;
+  }
+
+  async function getPreviewData(urlToSearch, attempt = 1) {
+    if (attempt > 2 || !urlToSearch) return null;
+
+    if (previewCache.has(urlToSearch)) {
+      return previewCache.get(urlToSearch);
+    }
+
+    const html = await fetchHtmlWithFallback(urlToSearch);
+    if (!html) return null;
+
+    try {
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const foundImages = [];
+      const pushImage = (src) => {
+        const normalizedSrc = normalizePreviewImageUrl(src);
+        if (!normalizedSrc || !isValidImg(normalizedSrc)) return;
+        if (!foundImages.includes(normalizedSrc)) {
+          foundImages.push(normalizedSrc);
+        }
+      };
+
+      const maleImage = doc.querySelector("#wiki-tab-0-0 img");
+      const femaleImage = doc.querySelector("#wiki-tab-0-1 img");
+
+      pushImage(getImageCandidateSrc(maleImage));
+      pushImage(getImageCandidateSrc(femaleImage));
+
+      const ogImage = doc.querySelector('meta[property="og:image"], meta[name="og:image"]');
+      pushImage(ogImage?.getAttribute("content") || "");
+
+      if (foundImages.length === 0) {
+        [
+          "#page-content .image-container img",
+          "#page-content .scp-image-block img",
+          "#page-content .image-box img",
+          "#page-content a.image img",
+          "#page-content .thumbnail img",
+          "#page-content img"
+        ].forEach((selector) => {
+          Array.from(doc.querySelectorAll(selector)).forEach((img) => pushImage(getImageCandidateSrc(img)));
+        });
+      }
+
+      if (foundImages.length === 0) {
+        const links = Array.from(doc.querySelectorAll("#page-content a"));
+        const disambiguationLink = links.find((anchor) => {
+          const href = anchor.getAttribute("href");
+          if (!href) return false;
+
+          const hrefLower = href.toLowerCase();
+          return href.startsWith("/") && !hrefLower.includes(":") && !hrefLower.includes("npc");
+        });
+
+        if (disambiguationLink) {
+          const nextUrl = `https://aqwwiki.wikidot.com${disambiguationLink.getAttribute("href")}`;
+          return getPreviewData(nextUrl, attempt + 1);
+        }
+      }
+
+      if (foundImages.length === 0) {
+        extractPreviewImagesFromHtml(html).forEach((src) => pushImage(src));
+      }
+
+      const paragraphs = Array.from(doc.querySelectorAll("#page-content p"));
+      let descriptionIndex = 2;
+
+      for (let index = 0; index < paragraphs.length; index += 1) {
+        if (paragraphs[index].textContent.includes("Location:")) {
+          descriptionIndex = index;
+          break;
+        }
+      }
+
+      const descriptionNode = paragraphs[descriptionIndex] || null;
+      const payload = {
+        images: foundImages,
+        description: descriptionNode ? descriptionNode.cloneNode(true) : null
+      };
+
+      previewCache.set(urlToSearch, payload);
+      return payload;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function hidePreview() {
+    previewBox.classList.remove("visible");
+    previewBox.innerHTML = "";
+  }
+
+  function scheduleRemark(delay = 200) {
+    clearTimeout(remarkTimer);
+    remarkTimer = setTimeout(() => {
+      markElements();
+    }, delay);
+  }
+
+  function showPreview(data, itemName) {
+    if (!data || !Array.isArray(data.images) || data.images.length === 0) {
+      hidePreview();
+      return;
+    }
+
+    previewBox.innerHTML = "";
+    previewBox.classList.add("visible");
+
+    const imgContainer = document.createElement("div");
+    imgContainer.className = "img-container";
+
+    const imageType = data.images.length > 1 ? "img-multiple" : "img-single";
+    data.images.forEach((src) => {
+      const image = document.createElement("img");
+      image.src = src;
+      image.alt = itemName;
+      image.className = `img-add ${imageType}`;
+      imgContainer.appendChild(image);
+    });
+
+    previewBox.appendChild(imgContainer);
+
+    const title = document.createElement("p");
+    title.className = "aqw-helper-preview-title";
+    title.textContent = itemName;
+    previewBox.appendChild(title);
+
+    if (data.description) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "aqw-helper-preview-text";
+      wrapper.appendChild(data.description);
+      previewBox.appendChild(wrapper);
+    }
+  }
+
+  async function resolvePreviewUrl(target) {
+    if (isWiki) {
+      const link = target.closest("a");
+      if (!link || isNonItemWikiLink(link) || shouldSkipWikiContext(link)) return null;
+
+      const href = link.getAttribute("href") || "";
+      const itemName = getLinkItemText(link);
+      const details = getWikiItemDetails(await getWikiItemsData(), itemName);
+      return buildPreviewUrls(itemName, href, details)[0] || null;
+    }
+
+    if (isCharPage) {
+      const link = target.closest("a");
+      if (!link) return null;
+
+      const itemName = getLinkItemText(link);
+      if (!isValidItemText(itemName)) return null;
+
+      const details = getWikiItemDetails(await getWikiItemsData(), itemName);
+      return buildPreviewUrls(itemName, "", details)[0] || null;
+    }
+
+    return null;
+  }
+
+  async function handleHover(target) {
+    const link = resolvePreviewLink(target);
+    if (!link) {
+      return;
+    }
+
+    const itemName = getLinkItemText(link);
+    if (isWiki && lowerUrl.includes("-badges")) {
+      return;
+    }
+    if (isWiki && shouldSkipPreviewLink(link)) {
+      return;
+    }
+    if (!isValidItemText(itemName)) return;
+
+    const linkHref = link?.href || link?.getAttribute("href") || "";
+    const details = await getWikiItemsData().then((data) => getWikiItemDetails(data, itemName));
+    const previewUrls = buildPreviewUrls(itemName, linkHref, details);
+    if (!previewUrls.length) return;
+
+    clearTimeout(hoverTimer);
+    activePreviewKey = getPreviewKey(link);
+    hoverTimer = setTimeout(async () => {
+      const currentKey = getPreviewKey(link);
+      if (!currentKey || currentKey !== activePreviewKey) {
+        return;
+      }
+
+      let data = null;
+      for (const previewUrl of previewUrls) {
+        data = await getPreviewData(previewUrl);
+        if (data?.images?.length) {
+          break;
+        }
+      }
+      showPreview(data, itemName);
+    }, 60);
+  }
+
+  function displayBoostBanner(boostsText) {
+    if (!isWiki || !boostsText || boostsText.length === 0 || document.getElementById("aqw-boost-banner")) {
+      return;
+    }
+
+    let boostImg = null;
+    const boostName = boostsText[0].toLowerCase();
+
+    if (boostName.includes("double exp")) {
+      boostImg = chrome.runtime.getURL("images/XPBoost.png");
+    } else if (boostName.includes("double class")) {
+      boostImg = chrome.runtime.getURL("images/ClassBoost.png");
+    } else if (boostName.includes("double rep")) {
+      boostImg = chrome.runtime.getURL("images/RepBoost.png");
+    } else {
+      boostImg = chrome.runtime.getURL("images/GoldBoost.png");
+    }
+
+    const pageTitle = document.querySelector("#page-title");
+    if (!pageTitle) return;
+
+    const banner = document.createElement("div");
+    banner.id = "aqw-boost-banner";
+    banner.innerHTML = `
+      ${boostImg ? `<img src="${boostImg}" alt="Boost Icon">` : ""}
+      Active Server Boosts: <span>${boostsText.join(" | ")}</span>
+    `;
+
+    pageTitle.appendChild(banner);
+  }
+
+  function fetchAndUpdateBoosts() {
+    chrome.runtime.sendMessage({ action: "fetchArtixCalendar" }, (response) => {
+      if (!response?.success || !response.data) {
+        return;
+      }
+
+      try {
+        const html = response.data;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let activeBoost = null;
+        let shortestTimeDifference = Infinity;
+        const eventRegex = /title:\s*'([^']+)'[\s\S]*?start:\s*'([^']+)'/g;
+        let match;
+
+        while ((match = eventRegex.exec(html)) !== null) {
+          const eventText = match[1]
+            .replace(/\\u[\dA-F]{4}/gi, (value) => String.fromCharCode(parseInt(value.replace(/\\u/g, ""), 16)))
+            .trim();
+
+          const eventDateStr = match[2];
+          const textLower = eventText.toLowerCase();
+          const isCoreBoost =
+            textLower.includes("double exp") ||
+            textLower.includes("double class") ||
+            textLower.includes("double rep") ||
+            textLower.includes("double gold") ||
+            textLower.includes("double all");
+
+          if (!isCoreBoost) {
+            continue;
+          }
+
+          const eventDate = new Date(`${eventDateStr}T00:00:00`);
+          if (eventDate <= today) {
+            const daysDifference = today - eventDate;
+            if (daysDifference < shortestTimeDifference) {
+              shortestTimeDifference = daysDifference;
+              activeBoost = eventText;
+            }
+          }
+        }
+
+        const foundBoosts = [];
+        if (activeBoost) {
+          foundBoosts.push(activeBoost.replace(/\s+\d{1,2}\.\d{1,2}\.\d{2,4}$/, "").trim());
+        }
+
+        chrome.storage.local.set({
+          boostCache: {
+            data: foundBoosts,
+            expiresAt: Date.now() + (12 * 60 * 60 * 1000)
+          }
+        });
+
+        if (foundBoosts.length > 0) {
+          displayBoostBanner(foundBoosts);
+        }
+      } catch (_error) {
+        // Ignore parse failures for the calendar banner.
+      }
+    });
+  }
+
+  function initBoostBanner() {
+    if (!isWiki) return;
+
+    chrome.storage.local.get(["boostCache"], (result) => {
+      const cache = result.boostCache;
+      if (cache && cache.expiresAt > Date.now()) {
+        if (cache.data?.length) {
+          displayBoostBanner(cache.data);
+        }
+        return;
+      }
+
+      fetchAndUpdateBoosts();
+    });
+  }
+
+  document.addEventListener("mouseover", (event) => {
+    handleHover(event.target);
+  });
+
+  document.addEventListener("mouseout", (event) => {
+    const currentLink = resolvePreviewLink(event.target);
+    if (!currentLink) return;
+
+    const related = event.relatedTarget;
+    if (related) {
+      if (currentLink.contains?.(related)) {
+        return;
+      }
+
+      const relatedLink = resolvePreviewLink(related);
+      if (relatedLink && getPreviewKey(relatedLink) === getPreviewKey(currentLink)) {
+        return;
+      }
+
+      if (previewBox.contains(related)) {
+        return;
+      }
+    }
+
+    clearTimeout(hoverTimer);
+    activePreviewKey = "";
+    hidePreview();
+  });
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("a, button, li, em");
+    if (!trigger) {
+      return;
+    }
+
+    const triggerText = readNodeText(trigger);
+    const href = trigger.closest("a")?.getAttribute("href") || "";
+    const className = String(trigger.className || "");
+
+    const looksLikeWikiTab =
+      className.includes("yui-") ||
+      className.includes("collapsible-block-link") ||
+      /weapons|classes|armors|helms|back items|misc\. items|pets|houses|floor items|wall items/i.test(triggerText) ||
+      href === "javascript:;" ||
+      href.startsWith("#");
+
+    if (looksLikeWikiTab) {
+      scheduleRemark(250);
+      scheduleRemark(900);
+    }
+  }, true);
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") {
+      return;
+    }
+
+    if (changes[AQW_HELPER_STORAGE_KEY]) {
+      refreshInventory(changes[AQW_HELPER_STORAGE_KEY].newValue || []);
+    }
+  });
+
+  markElements();
+  setTimeout(markElements, 1200);
+  setTimeout(markElements, 2500);
+  setTimeout(markElements, 5000);
+  initBoostBanner();
+})();

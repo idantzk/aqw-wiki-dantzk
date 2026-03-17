@@ -1,0 +1,151 @@
+#aqw-helper-preview {
+  position: fixed;
+  z-index: 999999;
+  display: none;
+  width: auto;
+  max-width: min(420px, calc(100vw - 24px));
+  background: linear-gradient(180deg, rgba(18, 18, 18, 0.98) 0%, rgba(28, 28, 28, 0.98) 100%);
+  border: 1px solid #333;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  padding: 8px;
+  pointer-events: none;
+}
+
+#aqw-helper-preview.visible {
+  display: block;
+}
+
+.aqw-helper-preview-title {
+  margin: 0;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.aqw-helper-preview-text {
+  margin: 0;
+  color: #ddd;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.aqw-helper-icon {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.aqw-helper-status-icon {
+  width: 12px;
+  height: 12px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.aqw-helper-mark {
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+.aqw-helper-mark.owned {
+  color: #1db954;
+}
+
+.aqw-helper-mark.missing {
+  color: #ff4d4f;
+}
+
+.aqw-helper-badge-owned {
+  outline: 3px solid #1db954 !important;
+  outline-offset: 1px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.18);
+}
+
+.aqw-helper-badge-missing {
+  outline: 3px solid #ff4d4f !important;
+  outline-offset: 1px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.18);
+}
+
+.aqw-helper-badge-count {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 999999;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(20, 20, 20, 0.92);
+  color: #fff;
+  font-size: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+#page-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+#aqw-boost-banner {
+  color: #f0f0f0;
+  background: linear-gradient(90deg, #181818, #222222);
+  padding: 12px 15px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  margin-left: auto;
+}
+
+#aqw-boost-banner img {
+  width: 30px;
+  height: 30px;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+#aqw-boost-banner span {
+  font-weight: 400;
+}
+
+.content-view.visible {
+  position: fixed;
+  z-index: 1000;
+  top: 50%;
+  left: 30%;
+  transform: translateY(-50%);
+  width: 350px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  background-color: rgb(26, 26, 26);
+  color: #f0f0f0;
+  font-size: 14px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.img-container {
+  display: flex;
+  width: 100%;
+}
+
+.img-add.img-multiple {
+  width: 50%;
+}
+
+.img-add.img-single {
+  width: 100%;
+}
+
+@media screen and (max-width: 1360px) {
+  .content-view.visible {
+    left: 50%;
+  }
+}
