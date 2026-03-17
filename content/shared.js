@@ -2,6 +2,9 @@ const AQW_HELPER_STORAGE_KEY = "aqwHelperInventory";
 const AQW_HELPER_META_KEY = "aqwHelperMeta";
 const AQW_HELPER_BADGES_KEY = "aqwHelperBadges";
 const AQW_HELPER_BADGES_META_KEY = "aqwHelperBadgesMeta";
+const AQW_HELPER_WIKI_DATA_KEY = "aqwHelperWikiData";
+const AQW_HELPER_WIKI_META_KEY = "aqwHelperWikiMeta";
+const AQW_HELPER_WIKI_DATA_URL = "https://raw.githubusercontent.com/idantzk/aqw-wiki-dantzk/main/data/WikiItems.json";
 
 function normalizeItemName(name) {
   if (!name) return "";
@@ -85,6 +88,71 @@ function setBadgeMeta(meta) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ [AQW_HELPER_BADGES_META_KEY]: meta }, resolve);
   });
+}
+
+function getWikiDataFromStorage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([AQW_HELPER_WIKI_DATA_KEY], (result) => {
+      resolve(result[AQW_HELPER_WIKI_DATA_KEY] || null);
+    });
+  });
+}
+
+function setWikiDataInStorage(data) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [AQW_HELPER_WIKI_DATA_KEY]: data }, resolve);
+  });
+}
+
+function getWikiMeta() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([AQW_HELPER_WIKI_META_KEY], (result) => {
+      resolve(result[AQW_HELPER_WIKI_META_KEY] || null);
+    });
+  });
+}
+
+function setWikiMeta(meta) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [AQW_HELPER_WIKI_META_KEY]: meta }, resolve);
+  });
+}
+
+async function loadWikiItemsData() {
+  const stored = await getWikiDataFromStorage();
+  if (stored && typeof stored === "object") {
+    return stored;
+  }
+
+  try {
+    const response = await fetch(chrome.runtime.getURL("data/WikiItems.json"));
+    return await response.json();
+  } catch (_error) {
+    return {};
+  }
+}
+
+async function updateWikiItemsFromRemote() {
+  const response = await fetch(AQW_HELPER_WIKI_DATA_URL, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("JSON invalido");
+  }
+
+  const itemCount = Object.keys(data).length;
+  const meta = {
+    updatedAt: new Date().toISOString(),
+    itemCount,
+    source: AQW_HELPER_WIKI_DATA_URL
+  };
+
+  await setWikiDataInStorage(data);
+  await setWikiMeta(meta);
+  return meta;
 }
 
 function buildInventoryIndex(items) {

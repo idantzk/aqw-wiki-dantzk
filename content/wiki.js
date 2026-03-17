@@ -383,9 +383,7 @@
 
   async function getWikiItemsData() {
     if (!wikiItemsPromise) {
-      wikiItemsPromise = fetch(chrome.runtime.getURL("data/WikiItems.json"))
-        .then((response) => response.json())
-        .catch(() => ({}));
+      wikiItemsPromise = loadWikiItemsData();
     }
 
     return wikiItemsPromise;
