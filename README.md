@@ -31,3 +31,13 @@ Extensao para AQW Wiki com:
 
 - A extensao usa a base local do projeto e tambem pode baixar a base mais nova do GitHub.
 - Se algo nao atualizar, recarregue a extensao em `chrome://extensions/` e depois de `F5` na pagina.
+
+## Distribuicao
+
+Para criar um pacote limpo para a galera baixar:
+
+`scripts\build-release-package.bat`
+
+Guia rapido de publicacao:
+
+`RELEASES.md`
