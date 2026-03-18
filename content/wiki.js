@@ -3,8 +3,12 @@
   const lowerUrl = currentUrl.toLowerCase();
   const isWiki = lowerUrl.includes("aqwwiki.wikidot.com");
   const isCharPage = lowerUrl.includes("account.aq.com/charpage") && /[?&]id=/.test(lowerUrl);
+  const isManageAccount =
+    lowerUrl.includes("account.aq.com/aqw/inventory") ||
+    lowerUrl.includes("account.aq.com/aqw/buyback") ||
+    lowerUrl.includes("account.aq.com/manage");
 
-  if (!isWiki && !isCharPage) return;
+  if (!isWiki && !isCharPage && !isManageAccount) return;
 
   const previewBox = document.createElement("div");
   previewBox.id = "aqw-helper-preview";
@@ -18,6 +22,12 @@
   let inventoryItems = await getInventoryData();
   let inventoryIndex = buildInventoryIndex(inventoryItems);
   let wikiItemsPromise = null;
+  let calculatorTimer = null;
+  const calculatorState = {
+    mergeAc: false,
+    mergeLegend: false,
+    questMultiplier: 1
+  };
 
   function hasSyncedInventory() {
     return Array.isArray(inventoryItems) && inventoryItems.length > 0;
@@ -238,6 +248,15 @@
     return value.includes("same skills as");
   }
 
+  function isDropSectionContext(sectionText, lineText, closestLabel) {
+    const value = `${sectionText} ${lineText} ${closestLabel}`.toLowerCase();
+    return (
+      value.includes("items dropped") ||
+      value.includes("temporary items dropped") ||
+      value.includes("item dropped")
+    );
+  }
+
   function shouldSkipWikiContext(link) {
     if (!isWiki || !link) return false;
 
@@ -266,14 +285,17 @@
     }
 
     if (
-      sectionText.includes("monster:") ||
-      sectionText.includes("monsters:") ||
-      sectionText === "monster" ||
-      sectionText === "monsters" ||
-      lineText.includes("monster:") ||
-      lineText.includes("monsters:") ||
-      closestLabel.includes("monster:") ||
-      closestLabel.includes("monsters:")
+      !isDropSectionContext(sectionText, lineText, closestLabel) &&
+      (
+        sectionText.includes("monster:") ||
+        sectionText.includes("monsters:") ||
+        sectionText === "monster" ||
+        sectionText === "monsters" ||
+        lineText.includes("monster:") ||
+        lineText.includes("monsters:") ||
+        closestLabel.includes("monster:") ||
+        closestLabel.includes("monsters:")
+      )
     ) {
       return true;
     }
@@ -423,6 +445,21 @@
       .forEach((el) => el.remove());
   }
 
+  function addSimpleInventoryStatus(target, itemName) {
+    if (!target || target.dataset.aqwMarked === "1") return;
+    if (!isValidItemText(itemName)) return;
+
+    clearOldCustomMarks(target);
+
+    if (hasItem(inventoryIndex, itemName)) {
+      appendOwnedMark(target, itemName);
+    } else if (hasSyncedInventory()) {
+      appendMissingMark(target);
+    }
+
+    target.dataset.aqwMarked = "1";
+  }
+
   function getLinkItemText(link) {
     if (!link) return "";
 
@@ -433,6 +470,34 @@
       .replace(/\s*\(Rank\s+\d+\)/i, "")
       .replace(/\s+/g, " ")
       .trim();
+  }
+
+  function getPlainCellItemText(target) {
+    if (!target?.closest) return "";
+
+    const cell = target.closest("td, th, li, p, div");
+    if (!cell) return "";
+
+    const clone = cell.cloneNode(true);
+    clone.querySelectorAll("a, img, .aqw-helper-mark, .aqw-helper-status-icon, .aqw-helper-icon").forEach((el) => el.remove());
+    return (clone.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  function buildSyntheticPreviewTarget(target, itemName) {
+    if (!itemName) return null;
+
+    const href = buildWikiUrlFromName(itemName);
+    return {
+      getAttribute(name) {
+        if (name === "href") return href;
+        return "";
+      },
+      href,
+      textContent: itemName,
+      closest() {
+        return null;
+      }
+    };
   }
 
   function appendOwnedMark(target, itemName) {
@@ -507,7 +572,24 @@
       return null;
     }
 
-    return target.closest("a") || resolveRowItemLink(target);
+    const directLink = target.closest("a");
+    if (directLink) {
+      return directLink;
+    }
+
+    const rowLink = resolveRowItemLink(target);
+    if (rowLink) {
+      return rowLink;
+    }
+
+    if (isWiki || isManageAccount) {
+      const plainText = getPlainCellItemText(target);
+      if (isValidItemText(plainText)) {
+        return buildSyntheticPreviewTarget(target, plainText);
+      }
+    }
+
+    return null;
   }
 
   function getPreviewKey(link) {
@@ -516,8 +598,17 @@
     }
 
     const href = link.getAttribute("href") || "";
-    const text = getLinkItemText(link);
+    const text = typeof link.querySelector === "function" ? getLinkItemText(link) : String(link.textContent || "").trim();
     return `${href}::${text}`.toLowerCase();
+  }
+
+  function getPreviewTargetText(link) {
+    if (!link) return "";
+    if (typeof link.querySelector === "function" && link.tagName === "A") {
+      return getLinkItemText(link);
+    }
+
+    return String(link.textContent || "").replace(/\s+/g, " ").trim();
   }
 
   function shouldSkipPreviewLink(link) {
@@ -525,21 +616,23 @@
       return true;
     }
 
-    if (
-      link.closest("#breadcrumbs") ||
-      link.closest("#side-bar") ||
-      link.closest("#top-bar") ||
-      link.closest(".page-tags") ||
-      link.closest(".options") ||
-      link.closest(".pager") ||
-      link.closest(".yui-nav") ||
-      link.closest("sub")
-    ) {
-      return true;
+    if (typeof link.closest === "function") {
+      if (
+        link.closest("#breadcrumbs") ||
+        link.closest("#side-bar") ||
+        link.closest("#top-bar") ||
+        link.closest(".page-tags") ||
+        link.closest(".options") ||
+        link.closest(".pager") ||
+        link.closest(".yui-nav") ||
+        link.closest("sub")
+      ) {
+        return true;
+      }
     }
 
     const href = (link.getAttribute("href") || link.href || "").toLowerCase();
-    const text = getLinkItemText(link).toLowerCase();
+    const text = (typeof link.querySelector === "function" ? getLinkItemText(link) : String(link.textContent || "").trim()).toLowerCase();
 
     if (!href || href.startsWith("javascript:") || href.includes(":")) {
       return true;
@@ -571,6 +664,15 @@
     });
   }
 
+  function hasOwnedLinkInScope(scope) {
+    if (!scope) return false;
+
+    return Array.from(scope.querySelectorAll("a")).some((link) => {
+      const text = getLinkItemText(link);
+      return isValidItemText(text) && hasItem(inventoryIndex, text);
+    });
+  }
+
   function isRankRequirementTarget(target, itemName, lineText) {
     const lowerItemName = String(itemName || "").toLowerCase().trim();
     const targetCellText = readNodeText(target.closest("td, th, li, p, div") || target.parentElement);
@@ -592,6 +694,13 @@
       return new RegExp(`rank\\s+\\d+\\s+${escapedName}`).test(lineText);
     }
 
+    if (lowerItemName && /rank\s+\d+\s+/i.test(lineText)) {
+      const escapedName = lowerItemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      if (new RegExp(`rank\\s+\\d+\\s+${escapedName}`).test(lineText)) {
+        return true;
+      }
+    }
+
     return false;
   }
 
@@ -607,8 +716,14 @@
     if (hasRankRequirement) {
       const relatedRowLinks = getRelatedRowLinks(target);
       const relatedOwned = relatedRowLinks.some((link) => hasItem(inventoryIndex, getLinkItemText(link)));
+      const questOwned =
+        isQuestPage() &&
+        hasOwnedLinkInScope(
+          target.closest(".yui-content > div, .content-panel, .wiki-content-table, #page-content") ||
+          getActiveQuestContainer()
+        );
 
-      if (relatedOwned || isOwnedPageTitle()) {
+      if (relatedOwned || questOwned || isOwnedPageTitle()) {
         appendSimpleOwnedMark(target, "Voce ja cumpriu este requisito de rank");
       } else if (hasSyncedInventory()) {
         appendMissingMark(target);
@@ -634,11 +749,13 @@
       if (!cells.length) return;
 
       let itemLinks = [];
+      let plainNameCell = null;
       let rankLink = null;
 
       if (cells.length >= 3) {
         const nameCell = cells[Math.min(1, cells.length - 1)];
         const rankCell = cells[Math.min(2, cells.length - 1)];
+        plainNameCell = nameCell;
 
         itemLinks = Array.from(nameCell.querySelectorAll("a")).filter((link) => {
           const text = getLinkItemText(link);
@@ -648,6 +765,10 @@
         rankLink = Array.from(rankCell.querySelectorAll("a")).find((link) =>
           /^rank\s+\d+/i.test(getLinkItemText(link))
         ) || null;
+
+        if (!rankLink && rankCell && /^rank\s+\d+/i.test(readNodeText(rankCell))) {
+          rankLink = rankCell;
+        }
       }
 
       if (!itemLinks.length) {
@@ -665,17 +786,187 @@
 
         if (!rankLink) {
           rankLink = links.find((link) => /^rank\s+\d+/i.test(getLinkItemText(link))) || null;
+          if (!rankLink) {
+            const rankCell = cells[Math.min(2, cells.length - 1)];
+            if (rankCell && /^rank\s+\d+/i.test(readNodeText(rankCell))) {
+              rankLink = rankCell;
+            }
+          }
         }
       }
 
-        itemLinks.forEach((link) => {
+      itemLinks.forEach((link) => {
         if (link.dataset.aqwMarked === "1") return;
         addStatus(link, getLinkItemText(link));
       });
 
-      if (rankLink && rankLink.dataset.aqwMarked !== "1") {
-        addStatus(rankLink, getLinkItemText(rankLink));
+      if (!itemLinks.length && plainNameCell && plainNameCell.dataset.aqwMarked !== "1") {
+        const plainText = getPlainCellItemText(plainNameCell);
+        if (isValidItemText(plainText) && !shouldSkipWikiContext(plainNameCell.querySelector("a") || plainNameCell)) {
+          addStatus(plainNameCell, plainText);
+        }
       }
+
+      if (rankLink && rankLink.dataset.aqwMarked !== "1") {
+        const rankText =
+          typeof rankLink.querySelector === "function" && rankLink.tagName === "A"
+            ? getLinkItemText(rankLink)
+            : (rankLink.textContent || "").replace(/\s+/g, " ").trim();
+        addStatus(rankLink, rankText);
+      }
+    });
+  }
+
+  function markListPageItems() {
+    if (!isWiki) return;
+
+    document.querySelectorAll("#page-content .list-pages-item").forEach((item) => {
+      const primaryLink =
+        item.querySelector("p a") ||
+        item.querySelector("a");
+
+      if (!primaryLink) {
+        return;
+      }
+
+      if (primaryLink.dataset.aqwProcessed === "1") {
+        return;
+      }
+
+      const text = getLinkItemText(primaryLink);
+      const href = (primaryLink.getAttribute("href") || "").toLowerCase();
+      if (
+        !isValidItemText(text) ||
+        !href.startsWith("/") ||
+        href.includes(":") ||
+        lowerTextIncludesBlockedListItem(text)
+      ) {
+        primaryLink.dataset.aqwProcessed = "1";
+        return;
+      }
+
+      addSimpleInventoryStatus(primaryLink, text);
+      primaryLink.dataset.aqwProcessed = "1";
+    });
+  }
+
+  function lowerTextIncludesBlockedListItem(text) {
+    const value = String(text || "").toLowerCase().trim();
+    return (
+      value.includes("list of all tags") ||
+      value.includes("list of all") ||
+      value.includes("lorepedia") ||
+      value.includes("design notes") ||
+      value.includes("patch notes")
+    );
+  }
+
+  function isSimpleListPage() {
+    if (!isWiki) return false;
+    return document.querySelectorAll("#page-content .list-pages-box .list-pages-item").length >= 8;
+  }
+
+  function shouldSkipSimpleListLink(link) {
+    if (!link) return true;
+
+    const href = String(link.getAttribute("href") || "").trim().toLowerCase();
+    const text = getLinkItemText(link);
+    const lowerText = text.toLowerCase();
+
+    if (!text || !href) return true;
+    if (link.closest("#breadcrumbs, #side-bar, #top-bar, .page-tags, .pager, .yui-nav")) return true;
+    if (href.startsWith("javascript:") || href.startsWith("#")) return true;
+    if (href.includes(":") && !href.startsWith("http")) return true;
+    if (lowerTextIncludesBlockedListItem(text)) return true;
+    if (lowerText === "new" || /^[a-z0-9]$/.test(lowerText)) return true;
+    if (
+      lowerText.includes("lorepedia") ||
+      lowerText.includes("design notes") ||
+      lowerText.includes("patch notes") ||
+      lowerText.includes("(location)") ||
+      lowerText.includes("(npc)")
+    ) {
+      return true;
+    }
+
+    return !isValidItemText(text);
+  }
+
+  function markSimpleListPageLinks() {
+    if (!isSimpleListPage()) return;
+
+    document.querySelectorAll("#page-content .list-pages-box a").forEach((link) => {
+      if (link.dataset.aqwSimpleProcessed === "1") return;
+      link.dataset.aqwSimpleProcessed = "1";
+
+      if (shouldSkipSimpleListLink(link)) {
+        return;
+      }
+
+      addSimpleInventoryStatus(link, getLinkItemText(link));
+      link.dataset.aqwProcessed = "1";
+    });
+  }
+
+  function markQuestPageLinks() {
+    if (!isQuestPage()) return;
+
+    const activeContainer = getActiveQuestContainer();
+    if (!activeContainer) return;
+
+    activeContainer.querySelectorAll("a").forEach((link) => {
+      if (link.dataset.aqwQuestProcessed === "1") return;
+      link.dataset.aqwQuestProcessed = "1";
+
+      const text = getLinkItemText(link);
+      if (!isValidItemText(text) || isNonItemWikiLink(link)) {
+        return;
+      }
+
+      const lowerText = text.toLowerCase();
+      if (
+        lowerText.includes("lorepedia") ||
+        lowerText.includes("design notes") ||
+        lowerText.includes("patch notes") ||
+        lowerText.includes("class breakdown") ||
+        lowerText.includes("(npc)") ||
+        lowerText.includes("(location)")
+      ) {
+        return;
+      }
+
+      addStatus(link, text);
+      link.dataset.aqwProcessed = "1";
+    });
+  }
+
+  function markWikiFallbackLinks() {
+    if (!isWiki) return;
+
+    document.querySelectorAll("#page-content a").forEach((link) => {
+      if (link.dataset.aqwMarked === "1") return;
+
+      const text = getLinkItemText(link);
+      const lowerText = text.toLowerCase();
+      const href = String(link.getAttribute("href") || "").trim().toLowerCase();
+      const lineText = readNodeText(link.closest("li, p, div, td, tr") || link.parentElement);
+      const closestLabel = getClosestSectionLabel(link);
+      const sectionText = getSectionContextText(link);
+
+      if (!isValidItemText(text)) return;
+      if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
+      if (link.closest("#breadcrumbs, #side-bar, #top-bar, .page-tags, .options, .pager, .yui-nav, sub")) return;
+      if (
+        lowerText.includes("lorepedia") ||
+        lowerText.includes("patch notes") ||
+        lowerText.includes("design notes") ||
+        lowerText.includes("class breakdown") ||
+        lowerText.includes("(npc)")
+      ) {
+        return;
+      }
+
+      addSimpleInventoryStatus(link, text);
     });
   }
 
@@ -685,6 +976,10 @@
     }
 
     if (isWiki) {
+      markQuestPageLinks();
+      markSimpleListPageLinks();
+      markListPageItems();
+
       document.querySelectorAll("#page-content a").forEach((link) => {
         if (link.dataset.aqwProcessed === "1") return;
 
@@ -699,6 +994,7 @@
       });
 
       markTableRows();
+      markWikiFallbackLinks();
     }
 
     if (isCharPage) {
@@ -742,6 +1038,360 @@
     inventoryIndex = buildInventoryIndex(inventoryItems);
     resetMarks();
     markElements();
+    scheduleCalculatorRender(150);
+  }
+
+  function buildInventoryQuantityMap() {
+    const quantityMap = new Map();
+
+    for (const item of inventoryItems || []) {
+      const name = normalizeItemName(item?.name);
+      if (!name) continue;
+
+      const quantity = Math.max(1, parseInt(item.quantity || 1, 10) || 1);
+      quantityMap.set(name, (quantityMap.get(name) || 0) + quantity);
+    }
+
+    return quantityMap;
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function isMergePage() {
+    if (!isWiki) return false;
+
+    const title = readNodeText(document.querySelector("#page-title"));
+    const breadcrumbs = readNodeText(document.querySelector("#breadcrumbs"));
+    return title.includes("merge") || breadcrumbs.includes("merge");
+  }
+
+  function isQuestPage() {
+    if (!isWiki) return false;
+
+    const title = readNodeText(document.querySelector("#page-title"));
+    const breadcrumbs = readNodeText(document.querySelector("#breadcrumbs"));
+    return title.includes("quest") || breadcrumbs.includes("quest");
+  }
+
+  function isElementVisible(element) {
+    if (!element) return false;
+
+    const style = window.getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden";
+  }
+
+  function getActiveQuestContainer() {
+    const navset = document.querySelector(".yui-navset");
+    if (!navset) {
+      return document.querySelector("#page-content");
+    }
+
+    const visiblePanel = Array.from(navset.querySelectorAll(".yui-content > div")).find((panel) =>
+      isElementVisible(panel)
+    );
+
+    return visiblePanel || navset.querySelector(".yui-content > div") || document.querySelector("#page-content");
+  }
+
+  function extractPropertyTextFromLine(lineText, label) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = lineText.match(new RegExp(`${escaped}\\s*:\\s*(.+)$`, "i"));
+    return match ? match[1].trim() : "";
+  }
+
+  function parseMaterialQuantityFromCell(priceCell, materialLink) {
+    const afterLinkText = [];
+    let sibling = materialLink.nextSibling;
+
+    while (sibling) {
+      if (sibling.nodeType === Node.TEXT_NODE) {
+        afterLinkText.push(sibling.textContent || "");
+      } else if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName !== "A") {
+        afterLinkText.push(sibling.textContent || "");
+      } else if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === "A") {
+        break;
+      }
+      sibling = sibling.nextSibling;
+    }
+
+    const text = afterLinkText.join(" ").replace(/\s+/g, " ").trim() || priceCell.textContent || "";
+    const match = text.match(/x\s*([\d,]+)/i);
+    return match ? parseInt(match[1].replace(/,/g, ""), 10) || 1 : 1;
+  }
+
+  function collectMergeRequirements(filterAc = false, filterLegend = false) {
+    const quantityMap = buildInventoryQuantityMap();
+    const requiredTotals = new Map();
+    let totalShopItems = 0;
+    let ownedShopItems = 0;
+
+    document.querySelectorAll(".wiki-content-table tr").forEach((row) => {
+      const cells = Array.from(row.querySelectorAll("td"));
+      if (cells.length < 3) return;
+
+      const nameCell = cells[1];
+      const priceCell = cells[2];
+      const itemLink = Array.from(nameCell.querySelectorAll("a")).find((link) => isValidItemText(getLinkItemText(link)));
+      if (!itemLink) return;
+
+      const itemText = getLinkItemText(itemLink);
+      if (!itemText) return;
+
+      const itemHtml = nameCell.innerHTML.toLowerCase();
+      const itemLineText = readNodeText(nameCell);
+      const isAc = itemHtml.includes("acsmall") || itemHtml.includes("aclarge") || /\bac\b/i.test(itemLineText);
+      const isLegend =
+        itemHtml.includes("membersmall") ||
+        itemHtml.includes("memberlarge") ||
+        itemHtml.includes("legendsmall") ||
+        itemHtml.includes("legendlarge") ||
+        /\blegend\b/i.test(itemLineText);
+
+      if (filterAc || filterLegend) {
+        const matchesFilter = (filterAc && isAc) || (filterLegend && isLegend);
+        if (!matchesFilter) {
+          return;
+        }
+      }
+
+      totalShopItems += 1;
+      if (hasItem(inventoryIndex, itemText)) {
+        ownedShopItems += 1;
+        return;
+      }
+
+      Array.from(priceCell.querySelectorAll("a")).forEach((materialLink) => {
+        const materialName = getLinkItemText(materialLink);
+        if (!materialName) return;
+
+        const materialKey = normalizeItemName(materialName);
+        const quantity = parseMaterialQuantityFromCell(priceCell, materialLink);
+        const current = requiredTotals.get(materialKey) || {
+          label: materialName,
+          needed: 0,
+          have: quantityMap.get(materialKey) || 0
+        };
+
+        current.needed += quantity;
+        requiredTotals.set(materialKey, current);
+      });
+    });
+
+    return {
+      quantityMap,
+      requiredTotals: Array.from(requiredTotals.values()).sort((a, b) => a.label.localeCompare(b.label)),
+      totalShopItems,
+      ownedShopItems
+    };
+  }
+
+  function collectQuestRequirements(multiplier = 1) {
+    const quantityMap = buildInventoryQuantityMap();
+    const requiredTotals = new Map();
+    const activeContainer = getActiveQuestContainer();
+    if (!activeContainer) {
+      return { requiredTotals: [], questLabel: "", multiplier };
+    }
+
+    const titleElement = document.querySelector(".yui-nav .selected a em");
+    const questLabel = titleElement ? titleElement.textContent.trim() : "";
+    const requirementLabel = Array.from(activeContainer.querySelectorAll("strong, b")).find((node) => {
+      const text = readNodeText(node);
+      return text.includes("items required:") || text.includes("requires:");
+    });
+
+    if (!requirementLabel) {
+      return { requiredTotals: [], questLabel, multiplier };
+    }
+
+    let list = requirementLabel.parentElement?.nextElementSibling || null;
+    while (list && list.tagName !== "UL") {
+      list = list.nextElementSibling;
+    }
+
+    if (!list) {
+      return { requiredTotals: [], questLabel, multiplier };
+    }
+
+    Array.from(list.children).forEach((li) => {
+      if (li.tagName !== "LI") return;
+
+      const clone = li.cloneNode(true);
+      clone.querySelectorAll("ul, img").forEach((el) => el.remove());
+      const text = clone.textContent.replace(/\s+/g, " ").trim();
+      if (!text) return;
+
+      const match = text.match(/^(.*?)(?:\s*x\s*([\d,]+))?$/i);
+      if (!match) return;
+
+      const label = match[1].replace(/"/g, "").trim();
+      if (!label) return;
+
+      const key = normalizeItemName(label);
+      const baseQty = match[2] ? parseInt(match[2].replace(/,/g, ""), 10) || 1 : 1;
+      const current = requiredTotals.get(key) || {
+        label,
+        needed: 0,
+        have: quantityMap.get(key) || 0
+      };
+
+      current.needed += baseQty * Math.max(1, multiplier);
+      requiredTotals.set(key, current);
+    });
+
+    return {
+      requiredTotals: Array.from(requiredTotals.values()).sort((a, b) => a.label.localeCompare(b.label)),
+      questLabel,
+      multiplier: Math.max(1, multiplier)
+    };
+  }
+
+  function renderCalculatorPanel() {
+    if (!isWiki || (!isMergePage() && !isQuestPage())) {
+      document.getElementById("aqw-helper-calculator")?.remove();
+      return;
+    }
+
+    const oldPanel = document.getElementById("aqw-helper-calculator");
+    if (oldPanel) {
+      oldPanel.remove();
+    }
+
+    const panel = document.createElement("section");
+    panel.id = "aqw-helper-calculator";
+    panel.className = "aqw-helper-calculator";
+
+    if (isMergePage()) {
+      const result = collectMergeRequirements(calculatorState.mergeAc, calculatorState.mergeLegend);
+      const materialRows = result.requiredTotals
+        .map((material) => {
+          const missing = Math.max(0, material.needed - material.have);
+          return `
+            <tr>
+              <td>${escapeHtml(material.label)}</td>
+              <td>${material.needed}</td>
+              <td>${material.have}</td>
+              <td class="${missing === 0 ? "ok" : "bad"}">${missing === 0 ? "Pronto" : missing}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      let gathered = 0;
+      let needed = 0;
+      result.requiredTotals.forEach((material) => {
+        needed += material.needed;
+        gathered += Math.min(material.have, material.needed);
+      });
+      const progress = needed > 0 ? Math.round((gathered / needed) * 100) : 0;
+
+      panel.innerHTML = `
+        <div class="aqw-helper-calculator-head">
+          <div>
+            <h3>Calculadora Farmadora</h3>
+            <p>Resumo dos materiais que faltam para os itens do merge que voce ainda nao tem.</p>
+          </div>
+          <div class="aqw-helper-calculator-meta">Itens da shop: <strong>${result.ownedShopItems} / ${result.totalShopItems}</strong></div>
+        </div>
+        <div class="aqw-helper-calculator-controls">
+          <label><input type="checkbox" id="aqw-helper-calc-ac" ${calculatorState.mergeAc ? "checked" : ""}> Apenas AC</label>
+          <label><input type="checkbox" id="aqw-helper-calc-legend" ${calculatorState.mergeLegend ? "checked" : ""}> Apenas Legend</label>
+        </div>
+        <div class="aqw-helper-calculator-progress">
+          <span>Progresso de materiais</span>
+          <div class="aqw-helper-calculator-bar"><div style="width:${progress}%">${progress}%</div></div>
+        </div>
+        ${
+          result.requiredTotals.length
+            ? `<table class="aqw-helper-calculator-table">
+                <thead>
+                  <tr><th>Material</th><th>Precisa</th><th>Voce tem</th><th>Falta</th></tr>
+                </thead>
+                <tbody>${materialRows}</tbody>
+              </table>`
+            : `<p class="aqw-helper-calculator-empty">Nada faltando por aqui. Essa shop ja esta completa com os filtros atuais.</p>`
+        }
+      `;
+    } else {
+      const result = collectQuestRequirements(calculatorState.questMultiplier);
+      const materialRows = result.requiredTotals
+        .map((material) => {
+          const missing = Math.max(0, material.needed - material.have);
+          return `
+            <tr>
+              <td>${escapeHtml(material.label)}</td>
+              <td>${material.needed}</td>
+              <td>${material.have}</td>
+              <td class="${missing === 0 ? "ok" : "bad"}">${missing === 0 ? "Pronto" : missing}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      panel.innerHTML = `
+        <div class="aqw-helper-calculator-head">
+          <div>
+            <h3>Calculadora Farmadora</h3>
+            <p>Requisitos para repetir a quest${result.questLabel ? ` <strong>${escapeHtml(result.questLabel)}</strong>` : ""}.</p>
+          </div>
+          <div class="aqw-helper-calculator-meta">Quest turns: <strong>${result.multiplier}x</strong></div>
+        </div>
+        <div class="aqw-helper-calculator-controls">
+          <label>Repeticoes:
+            <input type="number" id="aqw-helper-calc-quest" min="1" value="${result.multiplier}">
+          </label>
+        </div>
+        ${
+          result.requiredTotals.length
+            ? `<table class="aqw-helper-calculator-table">
+                <thead>
+                  <tr><th>Item</th><th>Precisa</th><th>Voce tem</th><th>Falta</th></tr>
+                </thead>
+                <tbody>${materialRows}</tbody>
+              </table>`
+            : `<p class="aqw-helper-calculator-empty">Nao encontrei lista de requisitos nessa aba.</p>`
+        }
+      `;
+    }
+
+    const insertBefore = document.querySelector(".yui-navset") || document.querySelector("#page-content");
+    if (insertBefore?.parentNode) {
+      insertBefore.parentNode.insertBefore(panel, insertBefore);
+    }
+
+    const acCheckbox = document.getElementById("aqw-helper-calc-ac");
+    const legendCheckbox = document.getElementById("aqw-helper-calc-legend");
+    const questInput = document.getElementById("aqw-helper-calc-quest");
+
+    acCheckbox?.addEventListener("change", (event) => {
+      calculatorState.mergeAc = event.target.checked;
+      renderCalculatorPanel();
+    });
+
+    legendCheckbox?.addEventListener("change", (event) => {
+      calculatorState.mergeLegend = event.target.checked;
+      renderCalculatorPanel();
+    });
+
+    questInput?.addEventListener("change", (event) => {
+      const value = Math.max(1, parseInt(event.target.value, 10) || 1);
+      calculatorState.questMultiplier = value;
+      renderCalculatorPanel();
+    });
+  }
+
+  function scheduleCalculatorRender(delay = 120) {
+    clearTimeout(calculatorTimer);
+    calculatorTimer = setTimeout(() => {
+      renderCalculatorPanel();
+    }, delay);
   }
 
   function isValidImg(srcImg) {
@@ -1092,7 +1742,7 @@
       return;
     }
 
-    const itemName = getLinkItemText(link);
+    const itemName = getPreviewTargetText(link);
     if (isWiki && lowerUrl.includes("-badges")) {
       return;
     }
@@ -1157,7 +1807,15 @@
   }
 
   function fetchAndUpdateBoosts() {
+    if (!chrome?.runtime?.id) {
+      return;
+    }
+
     chrome.runtime.sendMessage({ action: "fetchArtixCalendar" }, (response) => {
+      if (chrome.runtime.lastError) {
+        return;
+      }
+
       if (!response?.success || !response.data) {
         return;
       }
@@ -1286,6 +1944,8 @@
     if (looksLikeWikiTab) {
       scheduleRemark(250);
       scheduleRemark(900);
+      scheduleCalculatorRender(250);
+      scheduleCalculatorRender(900);
     }
   }, true);
 
@@ -1300,8 +1960,41 @@
   });
 
   markElements();
+  scheduleCalculatorRender(200);
   setTimeout(markElements, 1200);
+  setTimeout(scheduleCalculatorRender, 1200);
   setTimeout(markElements, 2500);
+  setTimeout(scheduleCalculatorRender, 2500);
   setTimeout(markElements, 5000);
+  setTimeout(scheduleCalculatorRender, 5000);
+  setTimeout(markElements, 9000);
+  setTimeout(markElements, 14000);
+
+  if (isSimpleListPage()) {
+    const listRoot =
+      document.querySelector("#page-content .list-pages-box") ||
+      document.querySelector("#page-content");
+
+    if (listRoot) {
+      const listObserver = new MutationObserver(() => {
+        markSimpleListPageLinks();
+        markListPageItems();
+      });
+
+      listObserver.observe(listRoot, { childList: true, subtree: true });
+    }
+  }
+
+  if (isQuestPage()) {
+    const questRoot = document.querySelector(".yui-navset") || document.querySelector("#page-content");
+    if (questRoot) {
+      const questObserver = new MutationObserver(() => {
+        markQuestPageLinks();
+      });
+
+      questObserver.observe(questRoot, { childList: true, subtree: true });
+    }
+  }
+
   initBoostBanner();
 })();

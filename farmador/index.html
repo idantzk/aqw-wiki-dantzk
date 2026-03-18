@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FARMADOR DANTZK</title>
+  <link rel="stylesheet" href="farmador.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <div class="hero-mark">FD</div>
+      <div class="hero-copy">
+        <h1>FARMADOR DANTZK</h1>
+        <p>Lista de itens para farmar com base no que voce ainda nao tem.</p>
+      </div>
+      <div class="hero-stats">
+        <div class="stat-card">
+          <span class="stat-label">Itens da conta</span>
+          <strong id="count-account-items">0</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Itens disponiveis</span>
+          <strong id="count-available-items">0</strong>
+        </div>
+      </div>
+    </header>
+
+    <section class="filters-card">
+      <div class="filters-head">
+        <h2>Filtros do FARMADOR</h2>
+        <button class="refresh-btn" id="refreshList" type="button">Atualizar lista</button>
+      </div>
+      <div class="filters-grid">
+        <label><input type="checkbox" id="filtro-ac" /> Item AC</label>
+        <label><input type="checkbox" id="filtro-legend" /> Item Legend</label>
+        <label><input type="checkbox" id="filtro-drop" /> Item Drop</label>
+        <label><input type="checkbox" id="filtro-merge" /> Item Merge</label>
+        <label><input type="checkbox" id="filtro-seasonal" /> Item Seasonal</label>
+        <label><input type="checkbox" id="filtro-hard" /> Item Hard</label>
+        <label><input type="checkbox" id="classe-hard" /> Apenas Classes</label>
+        <label><input type="checkbox" id="filtro-donate" /> Itens para doar</label>
+      </div>
+      <div class="search-row">
+        <input type="text" id="search-input" placeholder="Pesquisar item..." />
+        <p id="farmadorStatus" class="status-text">Carregando base do FARMADOR...</p>
+      </div>
+    </section>
+
+    <section class="table-card">
+      <table id="tabela-farm" class="farm-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Como pegar</th>
+            <th>Tags</th>
+          </tr>
+        </thead>
+        <tbody id="corpo-tabela"></tbody>
+      </table>
+      <div class="load-more-wrap">
+        <button id="btn-carregar-mais" class="load-more-btn" type="button" hidden>Carregar mais</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="../content/shared.js"></script>
+  <script src="farmador.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$FullRescan,
   [int]$MaxItems = 250,
   [int]$RetryCount = 3,
@@ -546,3 +546,4 @@ Write-Host "Backup salvo em: $backupFile"
 if ($failedSeeds.Count -gt 0) {
   Write-Host "Seeds com falha: $($failedSeeds -join ', ')"
 }
+

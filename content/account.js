@@ -1,6 +1,9 @@
 (async function initAccountHelper() {
   const url = window.location.href.toLowerCase();
   const hasCharPageId = /[?&]id=/.test(url);
+  const isInventoryPage = url.includes("/aqw/inventory");
+  const isBuybackPage = url.includes("/aqw/buyback");
+  const isManagePage = url.includes("/manage");
 
   if (!url.includes("account.aq.com")) {
     return;
@@ -80,7 +83,7 @@
     }
   }
 
-  if (hasCharPageId || url.includes("/manage")) {
+  if (isInventoryPage || isBuybackPage || isManagePage) {
     syncInventory();
   }
 })();

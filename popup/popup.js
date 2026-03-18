@@ -2,6 +2,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const openWikiButton = document.getElementById("openWiki");
   const openInventoryButton = document.getElementById("openInventory");
   const openCharPageButton = document.getElementById("openCharPage");
+  const openFarmadorButton = document.getElementById("openFarmador");
   const syncStatus = document.getElementById("syncStatus");
   const wikiDataStatus = document.getElementById("wikiDataStatus");
   const updateWikiDataButton = document.getElementById("updateWikiData");
@@ -54,6 +55,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if (openCharPageButton) {
     openCharPageButton.addEventListener("click", () => {
       openTab("https://account.aq.com/CharPage");
+    });
+  }
+
+  if (openFarmadorButton) {
+    openFarmadorButton.addEventListener("click", () => {
+      openTab(chrome.runtime.getURL("farmador/index.html"));
     });
   }
 
