@@ -175,7 +175,7 @@
     return image.getAttribute("alt") || image.getAttribute("title") || "";
   }
 
-  function applyBadgeBorder(target, owned, title) {
+  function applyBadgeEffect(target, owned, title) {
     const image = target?.tagName === "IMG" ? target : target?.querySelector("img");
     if (!image) return;
 
@@ -257,7 +257,7 @@
       const owned = hasBadgeMatch(badgeName, badgeImage);
       const imageKey = normalizeBadgePageImage(image);
 
-      applyBadgeBorder(
+      applyBadgeEffect(
         image,
         owned,
         owned ? "Voce ja tem esse badge" : "Voce ainda nao tem esse badge"
@@ -273,7 +273,7 @@
     for (const image of missingImages) {
       const imageKey = normalizeBadgePageImage(image);
       if (imageKey && ownedKeys.has(imageKey)) {
-        applyBadgeBorder(image, true, "Voce ja tem esse badge");
+        applyBadgeEffect(image, true, "Voce ja tem esse badge");
       }
     }
   }

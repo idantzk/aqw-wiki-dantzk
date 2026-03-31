@@ -194,17 +194,10 @@
 }
 
 .aqw-helper-badge-owned {
-  outline: 3px solid #1db954 !important;
-  outline-offset: 1px;
-  border-radius: 8px;
-  box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.18);
 }
 
 .aqw-helper-badge-missing {
-  outline: 3px solid #ff4d4f !important;
-  outline-offset: 1px;
-  border-radius: 8px;
-  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.18);
+  opacity: .4;
 }
 
 .aqw-helper-badge-count {
