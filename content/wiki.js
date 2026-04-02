@@ -1031,6 +1031,7 @@
       delete el.dataset.aqwMarked;
       clearOldCustomMarks(el);
     });
+
   }
 
   function refreshInventory(items) {
@@ -1668,6 +1669,46 @@
     previewBox.innerHTML = "";
   }
 
+  function positionPreviewNearTarget(target) {
+    const anchor = target?.closest?.("[data-aqw-preview-item], a, td, th, tr, li, div") || target;
+    if (!anchor?.getBoundingClientRect) {
+      previewBox.style.left = "24px";
+      previewBox.style.top = "24px";
+      previewBox.style.transform = "none";
+      return;
+    }
+
+    const rect = anchor.getBoundingClientRect();
+    const boxWidth = previewBox.offsetWidth || 350;
+    const boxHeight = previewBox.offsetHeight || 420;
+    const gap = 12;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = rect.right + gap;
+    let top = rect.top;
+
+    if (left + boxWidth > viewportWidth - 16) {
+      left = rect.left - boxWidth - gap;
+    }
+
+    if (left < 16) {
+      left = Math.max(16, viewportWidth - boxWidth - 16);
+    }
+
+    if (top + boxHeight > viewportHeight - 16) {
+      top = viewportHeight - boxHeight - 16;
+    }
+
+    if (top < 16) {
+      top = 16;
+    }
+
+    previewBox.style.left = `${Math.round(left)}px`;
+    previewBox.style.top = `${Math.round(top)}px`;
+    previewBox.style.transform = "none";
+  }
+
   function scheduleRemark(delay = 200) {
     clearTimeout(remarkTimer);
     remarkTimer = setTimeout(() => {
@@ -1675,7 +1716,7 @@
     }, delay);
   }
 
-  function showPreview(data, itemName) {
+  function showPreview(data, itemName, target) {
     if (!data || !Array.isArray(data.images) || data.images.length === 0) {
       hidePreview();
       return;
@@ -1709,6 +1750,8 @@
       wrapper.appendChild(data.description);
       previewBox.appendChild(wrapper);
     }
+
+    positionPreviewNearTarget(target);
   }
 
   async function resolvePreviewUrl(target) {
@@ -1771,7 +1814,7 @@
           break;
         }
       }
-      showPreview(data, itemName);
+      showPreview(data, itemName, target);
     }, 60);
   }
 

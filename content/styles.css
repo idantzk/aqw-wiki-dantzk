@@ -245,9 +245,6 @@
 .content-view.visible {
   position: fixed;
   z-index: 1000;
-  top: 50%;
-  left: 30%;
-  transform: translateY(-50%);
   width: 350px;
   padding: 1rem;
   display: flex;
@@ -274,6 +271,5 @@
 
 @media screen and (max-width: 1360px) {
   .content-view.visible {
-    left: 50%;
   }
 }
