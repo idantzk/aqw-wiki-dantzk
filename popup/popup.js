@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const syncStatus = document.getElementById("syncStatus");
   const wikiDataStatus = document.getElementById("wikiDataStatus");
   const updateWikiDataButton = document.getElementById("updateWikiData");
+  const themeInputs = Array.from(document.querySelectorAll('input[name="pageTheme"]'));
 
   function formatSyncStatus(meta) {
     if (!meta || !meta.syncedAt) {
@@ -72,6 +73,23 @@ document.addEventListener("DOMContentLoaded", () => {
   chrome.storage.local.get(["aqwHelperWikiMeta"], (result) => {
     if (!wikiDataStatus) return;
     wikiDataStatus.textContent = formatWikiDataStatus(result.aqwHelperWikiMeta || null);
+  });
+
+  getPageTheme().then((theme) => {
+    const selectedInput = themeInputs.find((input) => input.value === theme) || themeInputs[0];
+    if (selectedInput) {
+      selectedInput.checked = true;
+    }
+  });
+
+  themeInputs.forEach((input) => {
+    input.addEventListener("change", async () => {
+      if (!input.checked) {
+        return;
+      }
+
+      await setPageTheme(input.value);
+    });
   });
 
   if (updateWikiDataButton) {

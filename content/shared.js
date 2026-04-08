@@ -4,6 +4,7 @@ const AQW_HELPER_BADGES_KEY = "aqwHelperBadges";
 const AQW_HELPER_BADGES_META_KEY = "aqwHelperBadgesMeta";
 const AQW_HELPER_WIKI_DATA_KEY = "aqwHelperWikiData";
 const AQW_HELPER_WIKI_META_KEY = "aqwHelperWikiMeta";
+const AQW_HELPER_PAGE_THEME_KEY = "aqwHelperPageTheme";
 const AQW_HELPER_WIKI_DATA_URL = "https://raw.githubusercontent.com/idantzk/aqw-wiki-dantzk/main/data/WikiItems.json";
 
 function normalizeItemName(name) {
@@ -115,6 +116,22 @@ function getWikiMeta() {
 function setWikiMeta(meta) {
   return new Promise((resolve) => {
     chrome.storage.local.set({ [AQW_HELPER_WIKI_META_KEY]: meta }, resolve);
+  });
+}
+
+function getPageTheme() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([AQW_HELPER_PAGE_THEME_KEY], (result) => {
+      resolve(result[AQW_HELPER_PAGE_THEME_KEY] || "light");
+    });
+  });
+}
+
+function setPageTheme(theme) {
+  const normalizedTheme = theme === "dark" ? "dark" : "light";
+
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [AQW_HELPER_PAGE_THEME_KEY]: normalizedTheme }, resolve);
   });
 }
 

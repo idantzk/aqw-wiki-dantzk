@@ -19,6 +19,7 @@
   let hoverTimer = null;
   let remarkTimer = null;
   let activePreviewKey = "";
+  let currentPageTheme = await getPageTheme();
   let inventoryItems = await getInventoryData();
   let inventoryIndex = buildInventoryIndex(inventoryItems);
   let wikiItemsPromise = null;
@@ -28,6 +29,25 @@
     mergeLegend: false,
     questMultiplier: 1
   };
+
+  function shouldThemeCurrentPage() {
+    return isWiki || isManageAccount;
+  }
+
+  function applyPageTheme(theme) {
+    if (!shouldThemeCurrentPage()) {
+      return;
+    }
+
+    const normalizedTheme = theme === "dark" ? "dark" : "light";
+    currentPageTheme = normalizedTheme;
+
+    document.documentElement.classList.remove("aqw-helper-theme-light", "aqw-helper-theme-dark");
+    document.body?.classList.remove("aqw-helper-theme-light", "aqw-helper-theme-dark");
+
+    document.documentElement.classList.add(`aqw-helper-theme-${normalizedTheme}`);
+    document.body?.classList.add(`aqw-helper-theme-${normalizedTheme}`);
+  }
 
   function hasSyncedInventory() {
     return Array.isArray(inventoryItems) && inventoryItems.length > 0;
@@ -443,6 +463,8 @@
     target
       .querySelectorAll(".aqw-helper-mark, .aqw-helper-status-icon, .aqw-helper-icon")
       .forEach((el) => el.remove());
+
+    target.classList.remove("aqw-helper-owned-text", "aqw-helper-missing-text");
   }
 
   function addSimpleInventoryStatus(target, itemName) {
@@ -502,6 +524,7 @@
 
   function appendOwnedMark(target, itemName) {
     const location = getBestLocation(inventoryIndex, itemName);
+    target.classList.add("aqw-helper-owned-text");
     const mark = document.createElement("span");
     mark.className = "aqw-helper-mark owned";
     mark.textContent = "\u2714";
@@ -521,6 +544,7 @@
   }
 
   function appendMissingMark(target) {
+    target.classList.add("aqw-helper-missing-text");
     const mark = document.createElement("span");
     mark.className = "aqw-helper-mark missing";
     mark.textContent = " \u2716";
@@ -529,6 +553,7 @@
   }
 
   function appendSimpleOwnedMark(target, title) {
+    target.classList.add("aqw-helper-owned-text");
     const mark = document.createElement("span");
     mark.className = "aqw-helper-mark owned";
     mark.textContent = "\u2714";
@@ -2000,8 +2025,13 @@
     if (changes[AQW_HELPER_STORAGE_KEY]) {
       refreshInventory(changes[AQW_HELPER_STORAGE_KEY].newValue || []);
     }
+
+    if (changes[AQW_HELPER_PAGE_THEME_KEY]) {
+      applyPageTheme(changes[AQW_HELPER_PAGE_THEME_KEY].newValue || "light");
+    }
   });
 
+  applyPageTheme(currentPageTheme);
   markElements();
   scheduleCalculatorRender(200);
   setTimeout(markElements, 1200);

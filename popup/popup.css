@@ -82,6 +82,61 @@ body {
   gap: 10px;
 }
 
+.theme-switch {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.inline-theme-block {
+  margin: 0 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(179, 18, 23, 0.35);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.theme-title {
+  margin: 0 0 6px !important;
+  color: #fff !important;
+  font-size: 14px !important;
+  font-weight: 700;
+}
+
+.theme-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #7a2020;
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #f4d6d6;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.theme-option:hover {
+  transform: translateY(-1px);
+  border-color: #b31217;
+}
+
+.theme-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.theme-option:has(input:checked) {
+  border-color: #ff7b7b;
+  background: linear-gradient(135deg, rgba(179, 18, 23, 0.35), rgba(229, 45, 39, 0.16));
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(179, 18, 23, 0.2);
+}
+
 .status-text {
   margin: 0;
   font-size: 13px;

@@ -16,6 +16,135 @@
   display: block;
 }
 
+html.aqw-helper-theme-dark,
+body.aqw-helper-theme-dark {
+  background: #121212 !important;
+  color: #ededed !important;
+}
+
+html.aqw-helper-theme-dark body,
+body.aqw-helper-theme-dark {
+  background-image: none !important;
+}
+
+html.aqw-helper-theme-dark #container,
+html.aqw-helper-theme-dark #content-wrap,
+html.aqw-helper-theme-dark #main-content,
+html.aqw-helper-theme-dark #main-content > div,
+html.aqw-helper-theme-dark #page-content,
+html.aqw-helper-theme-dark #page-content > div,
+html.aqw-helper-theme-dark #page-content > table,
+html.aqw-helper-theme-dark #page-content > .table,
+html.aqw-helper-theme-dark #page-content > .content-panel,
+html.aqw-helper-theme-dark .page,
+html.aqw-helper-theme-dark .yui-navset,
+html.aqw-helper-theme-dark .yui-content,
+html.aqw-helper-theme-dark .yui-content > div,
+html.aqw-helper-theme-dark .content-panel,
+html.aqw-helper-theme-dark .wiki-content-table,
+html.aqw-helper-theme-dark .list-pages-box,
+html.aqw-helper-theme-dark .list-pages-item,
+html.aqw-helper-theme-dark .modal-content,
+html.aqw-helper-theme-dark .dataTables_wrapper,
+html.aqw-helper-theme-dark table,
+html.aqw-helper-theme-dark tr,
+html.aqw-helper-theme-dark td,
+html.aqw-helper-theme-dark th,
+html.aqw-helper-theme-dark .sorting,
+html.aqw-helper-theme-dark .sorting_1,
+html.aqw-helper-theme-dark .sorting_2,
+html.aqw-helper-theme-dark .sorting_3,
+html.aqw-helper-theme-dark .paginate_button,
+html.aqw-helper-theme-dark .card,
+html.aqw-helper-theme-dark .panel,
+html.aqw-helper-theme-dark .box,
+html.aqw-helper-theme-dark .sub_box,
+html.aqw-helper-theme-dark .alt,
+html.aqw-helper-theme-dark .alt1,
+html.aqw-helper-theme-dark .alt2,
+html.aqw-helper-theme-dark .gray,
+html.aqw-helper-theme-dark .white,
+html.aqw-helper-theme-dark .inner,
+html.aqw-helper-theme-dark .content,
+html.aqw-helper-theme-dark .ow,
+html.aqw-helper-theme-dark .ow table,
+html.aqw-helper-theme-dark .ow tr,
+html.aqw-helper-theme-dark .ow td,
+html.aqw-helper-theme-dark .ow th {
+  background: #1a1a1a !important;
+  color: #ededed !important;
+  border-color: #343434 !important;
+}
+
+html.aqw-helper-theme-dark [style*="background:#fff"],
+html.aqw-helper-theme-dark [style*="background: #fff"],
+html.aqw-helper-theme-dark [style*="background-color:#fff"],
+html.aqw-helper-theme-dark [style*="background-color: #fff"],
+html.aqw-helper-theme-dark [style*="background:white"],
+html.aqw-helper-theme-dark [style*="background: white"],
+html.aqw-helper-theme-dark [style*="background-color:white"],
+html.aqw-helper-theme-dark [style*="background-color: white"] {
+  background: #1a1a1a !important;
+  color: #ededed !important;
+}
+
+html.aqw-helper-theme-dark a,
+html.aqw-helper-theme-dark a:visited,
+html.aqw-helper-theme-dark .ow a {
+  color: #ff9090 !important;
+}
+
+html.aqw-helper-theme-dark a.aqw-helper-owned-text,
+html.aqw-helper-theme-dark a.aqw-helper-owned-text:visited,
+html.aqw-helper-theme-dark .aqw-helper-owned-text,
+html.aqw-helper-theme-dark .aqw-helper-owned-text .aqw-helper-text {
+  color: #43d17c !important;
+}
+
+html.aqw-helper-theme-dark a.aqw-helper-missing-text,
+html.aqw-helper-theme-dark a.aqw-helper-missing-text:visited,
+html.aqw-helper-theme-dark .aqw-helper-missing-text,
+html.aqw-helper-theme-dark .aqw-helper-missing-text .aqw-helper-text {
+  color: #ff6b6b !important;
+}
+
+html.aqw-helper-theme-dark input,
+html.aqw-helper-theme-dark select,
+html.aqw-helper-theme-dark textarea,
+html.aqw-helper-theme-dark button {
+  background: #111 !important;
+  color: #f0f0f0 !important;
+  border-color: #444 !important;
+}
+
+html.aqw-helper-theme-dark #breadcrumbs,
+html.aqw-helper-theme-dark #top-bar,
+html.aqw-helper-theme-dark #side-bar,
+html.aqw-helper-theme-dark .yui-nav,
+html.aqw-helper-theme-dark .pager,
+html.aqw-helper-theme-dark .options,
+html.aqw-helper-theme-dark .page-tags {
+  background: #181818 !important;
+  color: #d8d8d8 !important;
+  border-color: #2d2d2d !important;
+}
+
+html.aqw-helper-theme-dark table tr:nth-child(even),
+html.aqw-helper-theme-dark .wiki-content-table tr:nth-child(even),
+html.aqw-helper-theme-dark .dataTable tbody tr:nth-child(even) {
+  background: #202020 !important;
+}
+
+html.aqw-helper-theme-dark table tr:hover,
+html.aqw-helper-theme-dark .wiki-content-table tr:hover,
+html.aqw-helper-theme-dark .dataTable tbody tr:hover {
+  background: #262626 !important;
+}
+
+html.aqw-helper-theme-dark img {
+  filter: brightness(0.95);
+}
+
 #aqw-helper-calculator {
   margin: 0 0 18px;
   padding: 16px;
@@ -183,6 +312,18 @@
 
 .aqw-helper-mark.missing {
   color: #ff4d4f;
+}
+
+.aqw-helper-owned-text,
+.aqw-helper-owned-text:visited,
+.aqw-helper-owned-text .aqw-helper-text {
+  color: #43d17c !important;
+}
+
+.aqw-helper-missing-text,
+.aqw-helper-missing-text:visited,
+.aqw-helper-missing-text .aqw-helper-text {
+  color: #ff6b6b !important;
 }
 
 #page-content .list-pages-item a .aqw-helper-mark,
