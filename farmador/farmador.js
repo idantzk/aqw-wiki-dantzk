@@ -437,7 +437,6 @@ async function loadAllDatabases() {
 
     updateFarmList();
   } catch (error) {
-    console.error("Erro ao carregar o FARMADOR:", error);
     setStatus(`Erro ao carregar dados: ${error.message}`);
   }
 }

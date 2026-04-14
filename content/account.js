@@ -77,9 +77,7 @@
         itemCount: allItems.length,
         syncedAt: new Date().toISOString()
       });
-      console.log(`[AQW Helper] Inventario sincronizado: ${allItems.length} itens.`);
     } catch (error) {
-      console.error("[AQW Helper] Erro ao sincronizar inventario:", error);
     }
   }
 
