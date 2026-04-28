@@ -543,7 +543,20 @@
     target.appendChild(createIcon(iconSrc, iconTitle, "aqw-helper-status-icon"));
   }
 
-  function appendMissingMark(target) {
+  async function appendMissingMark(target) {
+    
+    if (!target) return;
+
+    let itemName = target.textContent
+      .replace(/<\/?li>/g, '')
+      .replace(/\s+x\d+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    let itemJson = await getWikiItemsData()
+    if ( target.id === "page-title" || target.parentElement?.tagName !== "LI" || !itemJson[itemName]) {
+      return;
+    }
     target.classList.add("aqw-helper-missing-text");
     const mark = document.createElement("span");
     mark.className = "aqw-helper-mark missing";
@@ -938,7 +951,6 @@
 
     const activeContainer = getActiveQuestContainer();
     if (!activeContainer) return;
-
     activeContainer.querySelectorAll("a").forEach((link) => {
       if (link.dataset.aqwQuestProcessed === "1") return;
       link.dataset.aqwQuestProcessed = "1";
