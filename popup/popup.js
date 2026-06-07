@@ -18,8 +18,9 @@ document.addEventListener("DOMContentLoaded", () => {
       ? meta.syncedAt
       : date.toLocaleString("pt-BR");
     const itemCount = Number.isFinite(meta.itemCount) ? meta.itemCount : 0;
+    const source = meta.source ? ` Fonte: ${meta.source}.` : "";
 
-    return `Ultima sincronizacao: ${formattedDate} (${itemCount} itens).`;
+    return `Ultima sincronizacao: ${formattedDate} (${itemCount} itens).${source}`;
   }
 
   function formatWikiDataStatus(meta) {

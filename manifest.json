@@ -29,6 +29,17 @@
     },
     {
       "matches": ["https://account.aq.com/*"],
+      "js": ["content/account-hook.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://account.aq.com/*"],
+      "js": ["content/account-page-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://account.aq.com/*"],
       "js": ["content/shared.js", "content/account.js", "content/badges.js", "content/wiki.js"],
       "css": ["content/styles.css"],
       "run_at": "document_idle"
