@@ -1819,7 +1819,8 @@
     }
     if (!isValidItemText(itemName)) return;
 
-    const linkHref = link?.href || link?.getAttribute("href") || "";
+    const resolvedHref = link?.href || link?.getAttribute("href") || "";
+    const linkHref = (isManageAccount && resolvedHref.includes("account.aq.com")) ? "" : resolvedHref;
     const details = await getWikiItemsData().then((data) => getWikiItemDetails(data, itemName));
     const previewUrls = buildPreviewUrls(itemName, linkHref, details);
     if (!previewUrls.length) return;
